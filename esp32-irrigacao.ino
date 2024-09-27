@@ -4,12 +4,12 @@
 #include <FirebaseJson.h>
 
 //Pines
-const int sensor = 32;  // GPIO36
-const int rele = 33;    // GPIO33
+const int sensor1 = 32;  // GPIO36
+const int relay1 = 33;    // GPIO33
 
-//Sensors
-int soilMoistureValue = 0;
-int scaleValue = 0;
+//sensors
+int soilMoistureValue1 = 0;
+int scaleValue1 = 0;
 
 //Timers
 unsigned long previousReadTime = 0;
@@ -19,8 +19,8 @@ void setup() {
   Serial.begin(115200);
   delay(10);
 
-  pinMode(rele, OUTPUT);
-  digitalWrite(rele, HIGH); //Starts with the relay off
+  pinMode(relay1, OUTPUT);
+  digitalWrite(relay1, HIGH); //Starts with the relay off
 
   if (connectToWiFi()) {
     initTimeClient();
@@ -44,12 +44,13 @@ void loop() {
   const int readInterval = 10000; //10 Seconds
   const int sendInterval = 60000; //1 Minute
 
-  if (currentTime - previousReadTime >= readInterval) { //Sensor reading every 1 second
+  if (currentTime - previousReadTime >= readInterval) { //sensor1 reading every 1 second
     previousReadTime = currentTime;
-    soilMoistureValue = analogRead(sensor); //Real value
-    scaleValue = map(soilMoistureValue, 0, 1023, 0, 100); //Value on a scale of 0 and 100
+    soilMoistureValue1 = analogRead(sensor1); //Real value
+    scaleValue1 = map(soilMoistureValue1, 0, 1023, 0, 100); //Value on a scale of 0 and 100
+
     //Serial.print("Soil moisture reading: ");
-    //Serial.println(soilMoistureValue);
+    //Serial.println(soilMoistureValue1);
   }
 
   if (currentTime - previousSendTime >= sendInterval) { //Monitors and sends data every 1 minute
@@ -64,8 +65,8 @@ void loop() {
       String subRoute = ("/" + getFormattedDateYear() + "/" + getFormattedDateMonth() + "/" + getFormattedDateDay() + "/" + getFormattedDateHourMinute());
 
       //Sends the value captured by the sensor to firebase
-      jsonData.add("soilMoistureValue", soilMoistureValue);
-      jsonData.add("soilMoisturePercentage", scaleValue);
+      jsonData.add("soilMoistureValue1", soilMoistureValue1);
+      jsonData.add("soilMoisturePercentage1", scaleValue1);
       sendToFirebase(("/period" + subRoute), jsonData);
 
       jsonData = getToFirebase("/request");
@@ -88,7 +89,7 @@ void loop() {
           jsonExecution.add("dateTime", getFormattedDateTime());
           sendToFirebase(("/irrigate" + subRoute), jsonExecution);
 
-        } else if (scaleValue <= 70) { //Activate irrigation if humidity is low
+        } else if (scaleValue1 <= 70) { //Activate irrigation if humidity is low
           ActivatePumping(10);
 
           jsonExecution.add("action", "automatic");
@@ -108,9 +109,9 @@ void ActivatePumping(const int &timeoutSeconds) {
 
   Serial.println("Pump connected by " + String(timeoutSeconds) + " seconds...");
 
-  digitalWrite(rele, LOW); //Turn on the relay
+  digitalWrite(relay1, LOW); //Turn on the relay
   delay(timeExecution);
-  digitalWrite(rele, HIGH);
+  digitalWrite(relay1, HIGH);
 
   Serial.println("Pump off!");
 }
