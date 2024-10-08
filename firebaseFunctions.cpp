@@ -41,7 +41,7 @@ bool sendToFirebase(const String &path, FirebaseJson &jsonData) {
 
     if (status) {
       Serial.println("Data sent successfully!");
-      delay(2000);
+      delay(1000);
       return true;
     } else {
       Serial.println("Error: " + String(client.lastError().code()) + ", Message: " + client.lastError().message());
