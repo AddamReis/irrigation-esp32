@@ -8,6 +8,7 @@ const int sensor1 = 32;  // GPIO36
 const int sensor2 = 35;  // GPIO35
 const int relay1 = 33;   // GPIO33
 const int relay2 = 25;   // GPIO25
+const int relayAll[] = { 33, 25 };
 
 //sensors
 int soilMoistureValue1 = 0;
@@ -52,33 +53,43 @@ void setup() {
 
 void loop() {
   unsigned long currentTime = millis();    //Gets the current time in milliseconds
-  const int readInterval = 60000;          //1 Minute
+  const int readInterval = 120000;         //2 Minute
   const int sendIntervalMinutes = 600000;  //10 Minutes
   const int sendIntervalHour = 3600000;    //1 Hour
 
-  if (currentTime - previousReadTime >= readInterval) {  //sensors reading every 1 Minute
-    initTimeClient();
+  if (currentTime - previousReadTime >= readInterval) {  //sensors reading every 2 Minutes
     previousReadTime = currentTime;
 
-    soilMoistureValue1 = analogRead(sensor1);  //Real value
-    soilMoistureValue2 = analogRead(sensor2);
-    soilMoistureValueMean = ((soilMoistureValue1 + soilMoistureValue2) / 2);
+    if (connectToWiFi()) {
+      initTimeClient();
+      subRoute = ("/" + getFormattedDateYear() + "/" + getFormattedDateMonth() + "/" + getFormattedDateDay() + "/" + getFormattedDateHourMinute());
 
-    scaleValue1 = map(soilMoistureValue1, 0, 1023, 0, 100);  //Value on a scale of 0 and 100
-    scaleValue2 = map(soilMoistureValue2, 0, 1023, 0, 100);
-    scaleValueMean = ((scaleValue1 + scaleValue2) / 2);
+      soilMoistureValue1 = analogRead(sensor1);  //Real value
+      soilMoistureValue2 = analogRead(sensor2);
+      soilMoistureValueMean = ((soilMoistureValue1 + soilMoistureValue2) / 2);
 
-    Serial.println("Soil Moisture Value 1: " + String(soilMoistureValue1) + " | Mean: " + String(scaleValue1));
-    Serial.println("Soil Moisture Value 2: " + String(soilMoistureValue2) + " | Mean: " + String(scaleValue2));
-    Serial.println("Soil Moisture Mean: " + String(soilMoistureValueMean) + " | Mean: " + String(scaleValueMean));
+      scaleValue1 = map(soilMoistureValue1, 0, 1023, 0, 100);  //Value on a scale of 0 and 100
+      scaleValue2 = map(soilMoistureValue2, 0, 1023, 0, 100);
+      scaleValueMean = ((scaleValue1 + scaleValue2) / 2);
 
-    if (currentTime - previousSendTimeMinutes >= sendIntervalMinutes) {  //sensors reading every 10 Minutes
-      previousSendTimeMinutes = currentTime;
+      Serial.println("Soil Moisture Value 1: " + String(soilMoistureValue1) + " | Mean: " + String(scaleValue1));
+      Serial.println("Soil Moisture Value 2: " + String(soilMoistureValue2) + " | Mean: " + String(scaleValue2));
+      Serial.println("Soil Moisture Mean: " + String(soilMoistureValueMean) + " | Mean: " + String(scaleValueMean));
+
+      FirebaseJsonData jsonResult;
       FirebaseJson jsonData;
+      execution = false;
 
-      if (connectToWiFi()) {
-        initTimeClient();
-        subRoute = ("/" + getFormattedDateYear() + "/" + getFormattedDateMonth() + "/" + getFormattedDateDay() + "/" + getFormattedDateHourMinute());
+      handlePumpExecution("execut-all-pumps", 0, "all", subRoute, "manual", execution);
+
+      if (execution == false) {
+        handlePumpExecution("execut-pump-1", relay1, "1", subRoute, "manual", execution);
+        handlePumpExecution("execut-pump-2", relay2, "2", subRoute, "manual", execution);
+      }
+
+      if (currentTime - previousSendTimeMinutes >= sendIntervalMinutes) {  //sensors reading every 10 Minutes
+        previousSendTimeMinutes = currentTime;
+        FirebaseJson jsonData;
 
         jsonData.add("soilMoistureValue1", soilMoistureValue1);  //Sends the value captured by the sensor to firebase
         jsonData.add("soilMoisturePercentage1", scaleValue1);
@@ -88,53 +99,64 @@ void loop() {
         jsonData.add("soilMoisturePercentageMean", scaleValueMean);
         sendToFirebase(("/period" + subRoute), jsonData);
 
-        if (currentTime - previousSendTimeHour >= sendIntervalHour) {  //Monitors and sends data every 1 hour
+        if (currentTime - previousSendTimeHour >= sendIntervalHour && execution == false) {  //Monitors and sends data every 1 hour
           previousSendTimeHour = currentTime;
-          FirebaseJsonData jsonResult;
-          FirebaseJson jsonExecution;
 
-          jsonData = getToFirebase("/request");
-          execution = false;
+          if (scaleValue1 <= 70)
+            handlePumpExecution("execut-pump-1", relay1, "1", subRoute, "automatic", execution);
 
-          if (jsonData.get(jsonResult, "execution")) {
-            execution = jsonResult.boolValue;
-
-            if (execution) {  //Activates the irrigation pump and updates the database
-              ActivatePumping(10, relay1);
-              ActivatePumping(10, relay2);
-
-              jsonData.set("execution", false);
-              sendToFirebase("/request", jsonData);
-
-              jsonExecution.add("action", "manual");
-              jsonExecution.add("ip", getIP());
-              jsonExecution.add("dateTime", getFormattedDateTime());
-              sendToFirebase(("/irrigate" + subRoute), jsonExecution);
-            } else {
-              if (scaleValue1 <= 70)
-                ActivatePumping(10, relay1);
-
-              if (scaleValue2 <= 70)
-                ActivatePumping(10, relay2);
-
-              if (execution) {
-                jsonExecution.add("action", "automatic");
-                jsonExecution.add("ip", getIP());
-                jsonExecution.add("dateTime", getFormattedDateTime());
-                sendToFirebase(("/irrigate" + subRoute), jsonExecution);
-              }
-            }
-          } else {
-            Serial.println("Error getting 'execution' value!");
-          }
+          if (scaleValue2 <= 70)
+            handlePumpExecution("execut-pump-2", relay2, "2", subRoute, "automatic", execution);
         }
       }
     }
   }
 }
 
+void handlePumpExecution(const String &pumpField, int relay, const String &pumpLabel, const String &subRoute, const String &action, bool &execution) {
+  FirebaseJsonData jsonResult;
+  FirebaseJson jsonData;
+
+  if (action == "manual") {
+    jsonData = getToFirebase("/request");
+
+    if (jsonData.get(jsonResult, pumpField)) {
+      execution = jsonResult.boolValue;
+
+      if (execution) {
+        if (pumpField == "execut-all-pumps") {
+          int arraySize = sizeof(relayAll) / sizeof(relayAll[0]);
+
+          for (int i = 0; i < arraySize; i++) {
+            ActivatePumping(10, relayAll[i]);
+          }
+        } else {
+          ActivatePumping(10, relay);
+        }
+
+        jsonData.set(pumpField, false);
+        sendToFirebase("/request", jsonData);
+
+        jsonData.clear();
+        jsonData.add("action", action);
+        jsonData.add("pumps", pumpLabel);
+        jsonData.add("ip", getIP());
+        jsonData.add("dateTime", getFormattedDateTime());
+        sendToFirebase(("/irrigate" + subRoute), jsonData);
+      }
+    }
+  } else if (action == "automatic") {
+    ActivatePumping(10, relay);
+
+    jsonData.add("action", action);
+    jsonData.add("pumps", pumpLabel);
+    jsonData.add("ip", getIP());
+    jsonData.add("dateTime", getFormattedDateTime());
+    sendToFirebase(("/irrigate" + subRoute), jsonData);
+  }
+}
+
 void ActivatePumping(const int &timeoutSeconds, const int relay) {
-  execution = true;
   Serial.println("Pump connected by " + String(timeoutSeconds) + " seconds...");
 
   digitalWrite(relay, LOW);  //Turn on the relay
