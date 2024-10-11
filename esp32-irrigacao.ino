@@ -80,11 +80,11 @@ void loop() {
       FirebaseJson jsonData;
       execution = false;
 
-      handlePumpExecution("execut-all-pumps", 0, "all", subRoute, "manual", execution);
+      handlePumpExecution("execute-all-pumps", 0, "all", subRoute, "manual", execution);
 
       if (execution == false) {
-        handlePumpExecution("execut-pump-1", relay1, "1", subRoute, "manual", execution);
-        handlePumpExecution("execut-pump-2", relay2, "2", subRoute, "manual", execution);
+        handlePumpExecution("execute-pump-1", relay1, "1", subRoute, "manual", execution);
+        handlePumpExecution("execute-pump-2", relay2, "2", subRoute, "manual", execution);
       }
 
       if (currentTime - previousSendTimeMinutes >= sendIntervalMinutes) {  //sensors reading every 10 Minutes
@@ -103,10 +103,10 @@ void loop() {
           previousSendTimeHour = currentTime;
 
           if (scaleValue1 <= 70)
-            handlePumpExecution("execut-pump-1", relay1, "1", subRoute, "automatic", execution);
+            handlePumpExecution("execute-pump-1", relay1, "1", subRoute, "automatic", execution);
 
           if (scaleValue2 <= 70)
-            handlePumpExecution("execut-pump-2", relay2, "2", subRoute, "automatic", execution);
+            handlePumpExecution("execute-pump-2", relay2, "2", subRoute, "automatic", execution);
         }
       }
     }
@@ -124,7 +124,7 @@ void handlePumpExecution(const String &pumpField, int relay, const String &pumpL
       execution = jsonResult.boolValue;
 
       if (execution) {
-        if (pumpField == "execut-all-pumps") {
+        if (pumpField == "execute-all-pumps") {
           int arraySize = sizeof(relayAll) / sizeof(relayAll[0]);
 
           for (int i = 0; i < arraySize; i++) {

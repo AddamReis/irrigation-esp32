@@ -37,7 +37,7 @@ bool sendToFirebase(const String &path, FirebaseJson &jsonData) {
 
   while (attempt < maxAttempts) {
     Serial.print("Attempt " + String(attempt + 1) + ": Sending data to Firebase... ");
-    status = Database.set(client, path, object_t(jsonString.c_str()));
+    status = Database.update(client, path, object_t(jsonString.c_str()));
 
     if (status) {
       Serial.println("Data sent successfully!");
